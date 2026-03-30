@@ -244,13 +244,6 @@ This ensures the framework scales linearly: 10 tests or 1,000 tests have the sam
 
 ### CI Implementation
 
-**GitHub Actions** (`.github/workflows/ci.yml`):
-
-1. Triggers on push/PR to `main`.
-2. Sets up Python 3.11 and installs dependencies + Playwright browsers.
-3. Runs the full test suite with environment variables injected.
-4. Uploads Allure results and test artifacts regardless of pass/fail.
-
 **Jenkins Pipeline** (`Jenkinsfile`):
 
 1. Parameterized for environment selection (dev/staging/production).

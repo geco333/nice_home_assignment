@@ -51,7 +51,13 @@ services:
       - BASE_URL=https://parabank.parasoft.com/parabank
       - API_BASE_URL=https://parabank.parasoft.com/parabank/services/bank
       - HEADLESS=true
-      - SELENIUM_REMOTE_URL=http://selenium-hub:4444/wd/hub
+      - SLOW_MO=0
+      - TIMEOUT=30000
+      - RETRY_COUNT=3
+      - RETRY_DELAY=1.0
+      - SCREENSHOT_DIR=reports/screenshots
+      - ALLURE_RESULTS_DIR=reports/allure-results
+      - LOG_DIR=reports/logs
     volumes:
       - ./reports:/app/reports
       - ./test-results:/app/test-results
