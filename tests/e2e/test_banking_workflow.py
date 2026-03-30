@@ -5,6 +5,7 @@ Each class registers its own user so the classes are independently runnable.
 Within each class, tests are ordered sequentially and share state via the
 class-scoped ``state`` fixture.
 """
+import logging
 
 import allure
 import pytest
@@ -21,6 +22,8 @@ from src.pages.transfer_funds_page import TransferFundsPage
 from src.utils.data_factory import create_customer_registration, credentials_from, random_transfer_amount
 
 
+logger = logging.getLogger(__name__)
+
 @pytest.mark.e2e
 @allure.epic("ParaBank Banking")
 @allure.feature("UI Banking Workflow")
@@ -30,11 +33,14 @@ class TestBankingUI:
     @allure.story("User Registration")
     @allure.severity(allure.severity_level.BLOCKER)
     @allure.title("Register a new user via UI")
-    def test_register_new_user(self, shared_page: Page, state: dict):
+    def test_register_new_user(self, shared_page: Page, shared_context: dict):
         base = ENV.base_url
         customer_data = create_customer_registration()
-        state["customer_data"] = customer_data
-        state["credentials"] = credentials_from(customer_data)
+        
+        logging.debug(f"Generated customer data for registration: {customer_data}")
+        
+        shared_context["customer_data"] = customer_data
+        shared_context["credentials"] = credentials_from(customer_data)
 
         with allure.step("Open registration page and fill form"):
             register_page = RegisterPage(shared_page, base)
@@ -58,8 +64,8 @@ class TestBankingUI:
     @allure.story("User Login")
     @allure.severity(allure.severity_level.BLOCKER)
     @allure.title("Login with registered credentials")
-    def test_login(self, shared_page: Page, state: dict):
-        credentials = state["credentials"]
+    def test_login(self, shared_page: Page, shared_context: dict):
+        credentials = shared_context["credentials"]
 
         with allure.step(f"Login as '{credentials.username}'"):
             login_page = LoginPage(shared_page, ENV.base_url)
@@ -78,11 +84,11 @@ class TestBankingUI:
     def test_verify_new_account_in_ui(
         self,
         shared_page: Page,
-        state: dict,
+            shared_context: dict,
         customer_api: CustomerApi,
         account_api: AccountApi,
     ):
-        credentials = state["credentials"]
+        credentials = shared_context["credentials"]
 
         with allure.step("Fetch customer and account data via API"):
             customer_id = customer_api.get_customer_id(credentials.username, credentials.password)
@@ -96,9 +102,9 @@ class TestBankingUI:
                 from_account_id=existing_account_id,
             )
 
-        state["customer_id"] = customer_id
-        state["existing_account_id"] = existing_account_id
-        state["new_account_id"] = new_account.id
+        shared_context["customer_id"] = customer_id
+        shared_context["existing_account_id"] = existing_account_id
+        shared_context["new_account_id"] = new_account.id
 
         with allure.step(f"Verify account {new_account.id} is visible in Accounts Overview"):
             overview_page = AccountsOverviewPage(shared_page, ENV.base_url)
@@ -111,11 +117,11 @@ class TestBankingUI:
     @allure.story("Fund Transfer")
     @allure.severity(allure.severity_level.CRITICAL)
     @allure.title("Transfer money between accounts via UI")
-    def test_transfer_funds(self, shared_page: Page, state: dict):
-        existing_account_id = state["existing_account_id"]
-        new_account_id = state["new_account_id"]
+    def test_transfer_funds(self, shared_page: Page, shared_context: dict):
+        existing_account_id = shared_context["existing_account_id"]
+        new_account_id = shared_context["new_account_id"]
         transfer_amount = random_transfer_amount(min_val=5, max_val=50)
-        state["transfer_amount"] = transfer_amount
+        shared_context["transfer_amount"] = transfer_amount
 
         with allure.step(f"Transfer ${transfer_amount} from {existing_account_id} to {new_account_id}"):
             transfer_page = TransferFundsPage(shared_page, ENV.base_url)
@@ -155,10 +161,10 @@ class TestBankingAPI:
     @allure.story("User Registration")
     @allure.severity(allure.severity_level.BLOCKER)
     @allure.title("Register user via UI (setup for API tests)")
-    def test_register_user_setup(self, shared_page: Page, state: dict):
+    def test_register_user_setup(self, shared_page: Page, shared_context: dict):
         customer_data = create_customer_registration()
-        state["customer_data"] = customer_data
-        state["credentials"] = credentials_from(customer_data)
+        shared_context["customer_data"] = customer_data
+        shared_context["credentials"] = credentials_from(customer_data)
 
         with allure.step("Register new user via UI"):
             register_page = RegisterPage(shared_page, ENV.base_url)
@@ -171,8 +177,8 @@ class TestBankingAPI:
     @allure.story("Customer Data")
     @allure.severity(allure.severity_level.CRITICAL)
     @allure.title("Retrieve customer ID via API login")
-    def test_get_customer_id(self, state: dict, customer_api: CustomerApi):
-        credentials = state["credentials"]
+    def test_get_customer_id(self, shared_context: dict, customer_api: CustomerApi):
+        credentials = shared_context["credentials"]
 
         with allure.step(f"GET /login/{credentials.username}/****"):
             customer_id = customer_api.get_customer_id(credentials.username, credentials.password)
@@ -182,30 +188,30 @@ class TestBankingAPI:
                 f"Expected positive integer customer ID, got: {customer_id}"
             )
 
-        state["customer_id"] = customer_id
+        shared_context["customer_id"] = customer_id
 
     @allure.story("Customer Data")
     @allure.severity(allure.severity_level.CRITICAL)
     @allure.title("Validate customer details match registration data")
-    def test_validate_customer_details(self, state: dict, customer_api: CustomerApi):
-        customer_data = state["customer_data"]
+    def test_validate_customer_details(self, shared_context: dict, customer_api: CustomerApi):
+        customer_data = shared_context["customer_data"]
 
-        with allure.step(f"GET /customers/{state['customer_id']}"):
-            customer = customer_api.get_customer(state["customer_id"])
+        with allure.step(f"GET /customers/{shared_context['customer_id']}"):
+            customer = customer_api.get_customer(shared_context["customer_id"])
 
         with allure.step("Assert all fields match registration input"):
             assert customer.first_name == customer_data.first_name
             assert customer.last_name == customer_data.last_name
             assert customer.address.street == customer_data.address.street
             assert customer.address.city == customer_data.address.city
-            assert customer.address.state == customer_data.address.state
+            assert customer.address.state == customer_data.address.shared_context
             assert customer.address.zip_code == customer_data.address.zip_code
 
     @allure.story("Account Management")
     @allure.severity(allure.severity_level.CRITICAL)
     @allure.title("Retrieve existing account for customer")
-    def test_get_existing_account(self, state: dict, account_api: AccountApi):
-        customer_id = state["customer_id"]
+    def test_get_existing_account(self, shared_context: dict, account_api: AccountApi):
+        customer_id = shared_context["customer_id"]
 
         with allure.step(f"GET /customers/{customer_id}/accounts"):
             accounts = account_api.get_customer_accounts(customer_id)
@@ -216,32 +222,32 @@ class TestBankingAPI:
             assert existing_account.customer_id == customer_id
             assert existing_account.id > 0
 
-        state["existing_account_id"] = existing_account.id
+        shared_context["existing_account_id"] = existing_account.id
 
     @allure.story("Account Management")
     @allure.severity(allure.severity_level.CRITICAL)
     @allure.title("Create new CHECKING account via curl")
-    def test_create_checking_account_via_curl(self, state: dict, account_api: AccountApi):
+    def test_create_checking_account_via_curl(self, shared_context: dict, account_api: AccountApi):
         with allure.step("POST /createAccount via curl subprocess"):
             new_account = account_api.create_account_via_curl(
-                customer_id=state["customer_id"],
+                customer_id=shared_context["customer_id"],
                 new_account_type=AccountType.CHECKING,
-                from_account_id=state["existing_account_id"],
+                from_account_id=shared_context["existing_account_id"],
             )
 
         with allure.step(f"Validate new account {new_account.id}"):
             assert new_account.id > 0, "New account should have a valid ID"
             assert new_account.type == "CHECKING", f"Expected CHECKING, got: {new_account.type}"
-            assert new_account.customer_id == state["customer_id"]
+            assert new_account.customer_id == shared_context["customer_id"]
 
-        state["new_account_id"] = new_account.id
+        shared_context["new_account_id"] = new_account.id
 
     @allure.story("Fund Transfer")
     @allure.severity(allure.severity_level.CRITICAL)
     @allure.title("Transfer funds via API and validate balances")
-    def test_transfer_and_validate_balances(self, state: dict, account_api: AccountApi):
-        existing_account_id = state["existing_account_id"]
-        new_account_id = state["new_account_id"]
+    def test_transfer_and_validate_balances(self, shared_context: dict, account_api: AccountApi):
+        existing_account_id = shared_context["existing_account_id"]
+        new_account_id = shared_context["new_account_id"]
         transfer_amount = random_transfer_amount(min_val=5, max_val=50)
 
         with allure.step("Record balances before transfer"):

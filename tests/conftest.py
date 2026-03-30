@@ -1,4 +1,5 @@
 """Shared fixtures for all test modules."""
+from typing import Iterator
 
 import pytest
 from playwright.sync_api import Page
@@ -51,18 +52,22 @@ def account_api(api_client: ApiClient) -> AccountApi:
 # ── E2E workflow fixtures ─────────────────────────────────────
 
 @pytest.fixture(scope="class")
-def shared_page(browser) -> Page:
+def shared_page(browser) -> Iterator[Page]:
     """Class-scoped page so the browser session persists across ordered test methods."""
+    
     context = browser.new_context(
         viewport={"width": 1280, "height": 720},
         ignore_https_errors=True,
     )
     page = context.new_page()
+    
     yield page
+    
     context.close()
 
 
 @pytest.fixture(scope="class")
-def state() -> dict:
+def shared_context() -> dict:
     """Mutable dict shared across all tests within a class for passing workflow data."""
+    
     return {}
