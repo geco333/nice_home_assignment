@@ -1,0 +1,11 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "e2e: end-to-end banking workflow tests",
+    "negative: negative scenario tests",
+]
+addopts = "--html=reports/report.html --self-contained-html -v"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"

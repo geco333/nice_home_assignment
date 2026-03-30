@@ -1,0 +1,10 @@
+services:
+  tests:
+    build: .
+    environment:
+      - BASE_URL=https://parabank.parasoft.com/parabank
+      - API_BASE_URL=https://parabank.parasoft.com/parabank/services/bank
+      - HEADLESS=true
+    volumes:
+      - ./reports:/app/reports
+      - ./test-results:/app/test-results
