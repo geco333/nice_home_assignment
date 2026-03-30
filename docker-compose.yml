@@ -17,17 +17,7 @@ services:
       - SE_EVENT_BUS_SUBSCRIBE_PORT=4443
       - SE_NODE_MAX_SESSIONS=4
       - SE_NODE_OVERRIDE_MAX_SESSIONS=true
-
-  firefox:
-    image: selenium/node-firefox:4.27.0
-    depends_on:
-      - selenium-hub
-    environment:
-      - SE_EVENT_BUS_HOST=selenium-hub
-      - SE_EVENT_BUS_PUBLISH_PORT=4442
-      - SE_EVENT_BUS_SUBSCRIBE_PORT=4443
-      - SE_NODE_MAX_SESSIONS=4
-      - SE_NODE_OVERRIDE_MAX_SESSIONS=true
+      - SE_NODE_GRID_URL=http://selenium-hub:4444
 
   edge:
     image: selenium/node-edge:4.27.0
@@ -39,13 +29,13 @@ services:
       - SE_EVENT_BUS_SUBSCRIBE_PORT=4443
       - SE_NODE_MAX_SESSIONS=4
       - SE_NODE_OVERRIDE_MAX_SESSIONS=true
+      - SE_NODE_GRID_URL=http://selenium-hub:4444
 
   tests:
     build: .
     depends_on:
       - selenium-hub
       - chrome
-      - firefox
       - edge
     environment:
       - BASE_URL=https://parabank.parasoft.com/parabank
@@ -58,6 +48,7 @@ services:
       - SCREENSHOT_DIR=reports/screenshots
       - ALLURE_RESULTS_DIR=reports/allure-results
       - LOG_DIR=reports/logs
+      - SELENIUM_REMOTE_URL=http://selenium-hub:4444
     volumes:
       - ./reports:/app/reports
       - ./test-results:/app/test-results

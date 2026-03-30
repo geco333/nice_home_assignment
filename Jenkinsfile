@@ -35,18 +35,18 @@ pipeline {
                 sh '''
                     pip install uv
                     uv pip install -r requirements.txt
-                    uv python -m playwright install --with-deps chromium
+                    uv run python -m playwright install --with-deps chromium
                 '''
             }
         }
         stage('Negative Tests') {
             steps {
-                sh 'pytest tests/negative/ -m negative'
+                sh 'uv run pytest tests/negative/ -m negative'
             }
         }
         stage("E2E Tests") {
             steps {
-                sh 'pytest tests/e2e/ -m e2e'
+                sh 'uv run pytest tests/e2e/ -m e2e'
             }
         }
         stage('Build & Push Docker Image') {

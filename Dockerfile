@@ -14,4 +14,4 @@ RUN python -m playwright install --with-deps chromium
 
 COPY . .
 
-CMD ["pytest", "-vs"]
+CMD ["pytest", "-vs", "-n", "auto", "--dist", "loadfile"]

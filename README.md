@@ -36,7 +36,7 @@ cp .env.example .env
 ### Running Tests
 
 ```bash
-# Run all tests
+# Run all tests (sequential)
 pytest
 
 # Run only the E2E banking workflow
@@ -52,6 +52,27 @@ HEADLESS=false pytest
 pytest -v
 ```
 
+### Parallel Execution with pytest-xdist
+
+The project includes `pytest-xdist` for parallel test execution. Use the `-n` flag to specify the number of workers:
+
+```bash
+# Auto-detect number of CPU cores
+pytest -n auto
+
+# Use a specific number of workers
+pytest -n 4
+
+# Distribute tests by file (recommended) — keeps tests within the same file
+# on the same worker, preserving shared_context ordering for E2E flows
+pytest -n auto --dist loadfile
+
+# Parallel negative tests only (these are fully independent)
+pytest tests/negative/ -n auto
+```
+
+> **Important:** The E2E tests in `test_banking_workflow.py` use a class-scoped `shared_context` to pass state between sequential steps (e.g., customer ID, account IDs). When running in parallel, use `--dist loadfile` to ensure all tests in a file execute on the same worker and maintain correct ordering. Without it, tests may fail with `KeyError` due to missing context.
+
 ### Viewing Reports
 
 ```bash
@@ -59,13 +80,35 @@ pytest -v
 allure serve reports/allure-results
 ```
 
-### Docker Execution
+### Docker Compose Execution
+
+The `docker-compose.yml` includes a full **Selenium Grid** (Hub + Chrome/Edge nodes) and a test runner service. Tests execute inside a container using the Chrome browser provided by the Selenium Grid node.
 
 ```bash
-# Build and run with docker-compose (includes Selenium Grid)
+# Build and run all services (Selenium Grid + tests)
 docker-compose up --build
 
-# Reports are mounted to ./reports on the host
+# Run in detached mode and follow test output
+docker-compose up --build -d
+docker-compose logs -f tests
+
+# Stop and clean up all containers
+docker-compose down
+
+# Rebuild only the tests service (after code changes)
+docker-compose up --build tests
+```
+
+Reports are mounted to the host via volumes:
+- `./reports/allure-results` — Allure raw results
+- `./reports/screenshots` — Failure screenshots
+- `./reports/logs` — Timestamped log files
+- `./test-results` — Playwright traces
+
+After the run completes, generate the Allure report from the host:
+
+```bash
+allure serve reports/allure-results
 ```
 
 ---
@@ -104,7 +147,7 @@ nice_home_assignment/
 │   └── negative/
 │       └── test_negative_scenarios.py  # 5 negative test cases (UI + API classes)
 ├── Dockerfile
-├── docker-compose.yml              # Selenium Grid (Hub + Chrome/Firefox/Edge nodes)
+├── docker-compose.yml              # Selenium Grid (Hub + Chrome/Edge nodes) + test runner
 ├── Jenkinsfile                     # CI/CD pipeline definition
 ├── .github/workflows/ci.yml       # GitHub Actions workflow
 ├── requirements.txt
@@ -173,7 +216,7 @@ No class updates needed when adding new variables — just add them to `.env`.
 
 | Decision                       | Benefit                                                                            | Cost                                                                                   |
 | ------------------------------ | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| **Sequential E2E tests**       | Tests the full flow as a real user would; catches integration issues between steps | Slower than isolated unit tests; a mid-step failure blocks downstream assertions       |
+| **Sequential E2E tests**       | Tests the full flow as a real user would; catches integration issues between steps | Slower than isolated unit tests; a mid-step failure blocks downstream assertions. Use `--dist loadfile` with `pytest-xdist` to parallelize across files while keeping intra-file order |
 | **`requests` for API**         | Lightweight, well-known, synchronous — matches Playwright sync mode                | Doesn't share Playwright's cookie jar; API calls are independent sessions              |
 | **curl via subprocess**        | Meets the assignment requirement verbatim                                          | Platform-dependent (curl must be installed); harder to assert HTTP status codes        |
 | **Session-scoped API client**  | One HTTP session reused across tests for efficiency                                | Must be careful with session state between test classes                                |
@@ -261,10 +304,12 @@ For larger teams, this extends naturally to:
 
 ### Dockerization
 
-The `Dockerfile` uses Microsoft's official `playwright/python` image which includes all browser dependencies pre-installed:
+The `Dockerfile` uses `python:3.11-bookworm` as the base image with Playwright and Chromium installed via `playwright install --with-deps chromium`. Dependencies are installed using `uv` for faster builds.
 
 - **Reproducible**: identical environment locally and in CI — no "works on my machine" issues.
-- **docker-compose** includes a full **Selenium Grid** (Hub + Chrome/Firefox/Edge nodes) for cross-browser execution and mounts `reports/` and `test-results/` volumes so artifacts are accessible on the host.
+- **docker-compose** includes a full **Selenium Grid** (Hub + Chrome/Edge nodes). The `SE_NODE_GRID_URL` setting on each node enables CDP WebSocket routing through the Hub, allowing Playwright to connect to remote browsers via the grid.
+- When `SELENIUM_REMOTE_URL` is set in the `tests` service, Playwright uses the Selenium Grid's Chrome browser. Without it, Playwright uses its bundled Chromium.
+- `reports/` and `test-results/` volumes are mounted to the host so artifacts (Allure results, screenshots, logs) are accessible after the run.
 - For teams with internal registries, the image can be pushed and reused across pipelines.
 - Environment variables are injected at `docker-compose` level, making it easy to point at different target environments.
 
@@ -272,8 +317,8 @@ The `Dockerfile` uses Microsoft's official `playwright/python` image which inclu
 
 1. **More tests**: Add files under `tests/`. Page objects and API clients are already reusable.
 2. **More pages**: Add a class in `src/pages/` extending `BasePage` — the retry mechanism is applied automatically.
-3. **Parallel execution**: Enable `pytest-xdist` with `pytest -n auto`. Each worker gets its own browser context and registers its own user, so tests are isolated.
-4. **Cross-browser**: Add Firefox/WebKit projects in the Playwright config, or use the Selenium Grid in `docker-compose.yml`.
+3. **Parallel execution**: Use `pytest-xdist` with `pytest -n auto --dist loadfile`. The `loadfile` strategy keeps tests from the same file on the same worker, preserving sequential `shared_context` flows while parallelizing across files. In Docker, update the `CMD` in the Dockerfile to include `-n auto --dist loadfile`.
+4. **Cross-browser**: Add Firefox/WebKit projects in the Playwright config, or use the Selenium Grid in `docker-compose.yml` which already includes Chrome and Edge nodes.
 5. **Data-driven tests**: Use `@pytest.mark.parametrize` with the data factory.
 6. **Multiple environments**: Swap `.env` files or use `ENV=staging pytest` to switch targets.
 7. **Visual regression**: Add `pytest-playwright-visual` for screenshot comparison.
