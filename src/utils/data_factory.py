@@ -15,13 +15,13 @@ def _random_digits(length: int) -> str:
 def create_customer_registration(**overrides) -> CustomerRegistration:
     uid = _random_id()
     defaults = dict(
-        first_name="Test",
+        first_name=f"Test_{uid}",
         last_name=f"User{uid}",
         address=Address(
             street=f"{_random_digits(3)} Automation St",
-            city="TestCity",
-            state="CA",
-            zip_code=_random_digits(5),
+            city=f"TestCity_{uid}",
+            state=f"CA_{uid}",
+            zip_code=str(_random_digits(5)),
         ),
         phone_number=f"555{_random_digits(7)}",
         ssn=f"{_random_digits(3)}-{_random_digits(2)}-{_random_digits(4)}",
@@ -29,6 +29,7 @@ def create_customer_registration(**overrides) -> CustomerRegistration:
         password=f"Pass{uid}!23",
     )
     defaults.update(overrides)
+    
     return CustomerRegistration(**defaults)
 
 

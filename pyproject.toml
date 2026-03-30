@@ -4,7 +4,7 @@ markers = [
     "e2e: end-to-end banking workflow tests",
     "negative: negative scenario tests",
 ]
-addopts = "--html=reports/report.html --self-contained-html -v"
+addopts = "--alluredir=reports/allure-results -v"
 
 [tool.ruff]
 line-length = 120

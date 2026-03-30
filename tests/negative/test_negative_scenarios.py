@@ -1,93 +1,112 @@
 """
-Negative scenario tests for ParaBank.
+Negative scenario tests for ParaBank, split into UI and API concerns.
 
-1. Login with invalid credentials
-2. Register with missing required fields
-3. Transfer with invalid / zero amount
-4. API – fetch non-existent account (404)
+Each test is independent and does not rely on shared state.
 """
 
+import allure
 import pytest
-import requests
-from playwright.sync_api import Page, expect
+from playwright.sync_api import Page
 
 from src.api.api_client import ApiClient
 from src.config.environment import ENV
 from src.models.customer import LoginCredentials
 from src.pages.login_page import LoginPage
 from src.pages.register_page import RegisterPage
-from src.pages.transfer_funds_page import TransferFundsPage
-from src.utils.data_factory import create_customer_registration, credentials_from
+from src.utils.data_factory import create_customer_registration
 
 
 @pytest.mark.negative
-class TestNegativeScenarios:
+@allure.epic("ParaBank Banking")
+@allure.feature("UI Negative Scenarios")
+class TestNegativeUI:
+    """UI-focused negative scenarios."""
 
-    # ── 1. Login with invalid credentials ─────────────────────
-
+    @allure.story("Authentication")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title("Login with invalid credentials shows error")
     def test_login_invalid_credentials(self, page: Page):
-        login_page = LoginPage(page, ENV.base_url)
-        login_page.open()
-        login_page.login(LoginCredentials(username="invalid_user", password="wrong_pass"))
+        with allure.step("Attempt login with wrong username/password"):
+            login_page = LoginPage(page, ENV.base_url)
+            login_page.open()
+            login_page.login(LoginCredentials(username="invalid_user", password="wrong_pass"))
 
-        error = login_page.get_error_message()
-        assert "error" in error.lower() or "not recognized" in error.lower() or "could not be verified" in error.lower(), (
-            f"Expected login error message, got: {error}"
-        )
+        with allure.step("Verify error message is displayed"):
+            error = login_page.get_error_message()
+            assert "error" in error.lower() or "not recognized" in error.lower() or "could not be verified" in error.lower(), (
+                f"Expected login error message, got: {error}"
+            )
 
-    # ── 2. Register with missing required fields ──────────────
-
+    @allure.story("Registration")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title("Register with empty form shows validation errors")
     def test_register_missing_fields(self, page: Page):
-        register_page = RegisterPage(page, ENV.base_url)
-        register_page.open()
+        with allure.step("Open registration page and submit empty form"):
+            register_page = RegisterPage(page, ENV.base_url)
+            register_page.open()
+            page.click(RegisterPage.REGISTER_BTN)
+            page.wait_for_load_state("domcontentloaded")
 
-        # Submit the form empty
-        page.click(RegisterPage.REGISTER_BTN)
-        page.wait_for_load_state("domcontentloaded")
+        with allure.step("Verify validation errors for all required fields"):
+            errors = register_page.get_error_messages()
+            assert len(errors) > 0, "Expected validation errors for empty form submission"
 
-        errors = register_page.get_error_messages()
-        assert len(errors) > 0, "Expected validation errors for empty form submission"
+            expected_fields = ["First name", "Last name", "Address", "City", "State", "Zip Code", "Username", "Password"]
+            for field in expected_fields:
+                has_error = any(field.lower() in e.lower() for e in errors)
+                assert has_error, f"Expected validation error for '{field}', got errors: {errors}"
 
-        expected_fields = ["First name", "Last name", "Address", "City", "State", "Zip Code", "Username", "Password"]
-        for field in expected_fields:
-            has_error = any(field.lower() in e.lower() for e in errors)
-            assert has_error, f"Expected validation error for '{field}', got errors: {errors}"
-
-    # ── 3. Register with an already existing username ─────────
-
+    @allure.story("Registration")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title("Register with duplicate username shows error")
     def test_register_duplicate_username(self, page: Page):
         customer_data = create_customer_registration()
 
-        register_page = RegisterPage(page, ENV.base_url)
-        register_page.open()
-        register_page.register(customer_data)
+        with allure.step("Register user for the first time"):
+            register_page = RegisterPage(page, ENV.base_url)
+            register_page.open()
+            register_page.register(customer_data)
+            heading = register_page.get_success_heading()
+            assert "Welcome" in heading, "First registration should succeed"
 
-        heading = register_page.get_success_heading()
-        assert "Welcome" in heading, "First registration should succeed"
+        with allure.step("Attempt to register the same username again"):
+            register_page.open()
+            register_page.register(customer_data)
 
-        register_page.open()
-        register_page.register(customer_data)
+        with allure.step("Verify duplicate username error"):
+            errors = register_page.get_error_messages()
+            assert len(errors) > 0, "Expected error for duplicate username"
+            assert any("already exists" in e.lower() or "username" in e.lower() for e in errors), (
+                f"Expected 'already exists' error, got: {errors}"
+            )
 
-        errors = register_page.get_error_messages()
-        assert len(errors) > 0, "Expected error for duplicate username"
-        assert any("already exists" in e.lower() or "username" in e.lower() for e in errors), (
-            f"Expected 'already exists' error, got: {errors}"
-        )
 
-    # ── 4. API – get non-existent account returns error ───────
+@pytest.mark.negative
+@allure.epic("ParaBank Banking")
+@allure.feature("API Negative Scenarios")
+class TestNegativeAPI:
+    """API-focused negative scenarios."""
 
-    def test_api_get_nonexistent_account(self, api_client: ApiClient):
-        response = api_client.get("accounts/999999999")
+    @allure.story("Account Lookup")
+    @allure.severity(allure.severity_level.NORMAL)
+    @allure.title("GET non-existent account returns error status")
+    def test_get_nonexistent_account(self, api_client: ApiClient):
+        with allure.step("GET /accounts/999999999"):
+            response = api_client.get("accounts/999999999")
 
-        assert response.status_code in (400, 404, 500), (
-            f"Expected error status for non-existent account, got: {response.status_code}"
-        )
+        with allure.step(f"Verify error status code (got {response.status_code})"):
+            assert response.status_code in (400, 404, 500), (
+                f"Expected error status for non-existent account, got: {response.status_code}"
+            )
 
-    # ── 5. API – login with wrong credentials returns error ───
+    @allure.story("Authentication")
+    @allure.severity(allure.severity_level.NORMAL)
+    @allure.title("API login with invalid credentials returns error status")
+    def test_login_invalid_credentials(self, api_client: ApiClient):
+        with allure.step("GET /login/nonexistent_user_xyz/badpassword"):
+            response = api_client.get("login/nonexistent_user_xyz/badpassword")
 
-    def test_api_login_invalid_credentials(self, api_client: ApiClient):
-        response = api_client.get("login/nonexistent_user_xyz/badpassword")
-
-        assert response.status_code in (400, 401, 403, 404, 500), (
-            f"Expected error status for invalid login, got: {response.status_code}"
-        )
+        with allure.step(f"Verify error status code (got {response.status_code})"):
+            assert response.status_code in (400, 401, 403, 404, 500), (
+                f"Expected error status for invalid login, got: {response.status_code}"
+            )

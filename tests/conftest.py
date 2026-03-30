@@ -7,11 +7,26 @@ from src.api.api_client import ApiClient
 from src.api.customer_api import CustomerApi
 from src.api.account_api import AccountApi
 from src.config.environment import ENV
-from src.pages.register_page import RegisterPage
-from src.pages.login_page import LoginPage
-from src.pages.accounts_overview_page import AccountsOverviewPage
-from src.pages.open_account_page import OpenAccountPage
-from src.pages.transfer_funds_page import TransferFundsPage
+
+
+# ── Playwright browser configuration ─────────────────────────
+
+@pytest.fixture(scope="session")
+def browser_context_args(browser_context_args):
+    return {
+        **browser_context_args,
+        "viewport": {"width": 1280, "height": 720},
+        "ignore_https_errors": True,
+    }
+
+
+@pytest.fixture(scope="session")
+def browser_type_launch_args(browser_type_launch_args):
+    return {
+        **browser_type_launch_args,
+        "headless": ENV.headless,
+        "slow_mo": ENV.slow_mo,
+    }
 
 
 # ── API fixtures ──────────────────────────────────────────────
@@ -33,28 +48,21 @@ def account_api(api_client: ApiClient) -> AccountApi:
     return AccountApi(api_client)
 
 
-# ── Page-object fixtures ─────────────────────────────────────
+# ── E2E workflow fixtures ─────────────────────────────────────
 
-@pytest.fixture()
-def register_page(page: Page) -> RegisterPage:
-    return RegisterPage(page, ENV.base_url)
-
-
-@pytest.fixture()
-def login_page(page: Page) -> LoginPage:
-    return LoginPage(page, ENV.base_url)
-
-
-@pytest.fixture()
-def accounts_overview_page(page: Page) -> AccountsOverviewPage:
-    return AccountsOverviewPage(page, ENV.base_url)
+@pytest.fixture(scope="class")
+def shared_page(browser) -> Page:
+    """Class-scoped page so the browser session persists across ordered test methods."""
+    context = browser.new_context(
+        viewport={"width": 1280, "height": 720},
+        ignore_https_errors=True,
+    )
+    page = context.new_page()
+    yield page
+    context.close()
 
 
-@pytest.fixture()
-def open_account_page(page: Page) -> OpenAccountPage:
-    return OpenAccountPage(page, ENV.base_url)
-
-
-@pytest.fixture()
-def transfer_funds_page(page: Page) -> TransferFundsPage:
-    return TransferFundsPage(page, ENV.base_url)
+@pytest.fixture(scope="class")
+def state() -> dict:
+    """Mutable dict shared across all tests within a class for passing workflow data."""
+    return {}

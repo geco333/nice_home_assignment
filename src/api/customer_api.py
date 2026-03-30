@@ -11,6 +11,7 @@ class CustomerApi:
     def login(self, username: str, password: str) -> dict:
         response = self.client.get(f"login/{username}/{password}")
         response.raise_for_status()
+
         return response.json()
 
     def get_customer(self, customer_id: int) -> Customer:
@@ -18,6 +19,7 @@ class CustomerApi:
         response.raise_for_status()
         data = response.json()
         addr = data.get("address", {})
+
         return Customer(
             id=data["id"],
             first_name=data["firstName"],
@@ -34,4 +36,5 @@ class CustomerApi:
 
     def get_customer_id(self, username: str, password: str) -> int:
         data = self.login(username, password)
+        
         return int(data["id"])
