@@ -48,8 +48,8 @@ pytest tests/negative/ -m negative
 # Run headed (visible browser)
 HEADLESS=false pytest
 
-# Run with verbose output
-pytest -v
+# Run in all test suites in parallel
+pytest -vs -n auto --dist loadfile
 ```
 
 ### Parallel Execution with pytest-xdist
