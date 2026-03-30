@@ -1,4 +1,12 @@
-"""Shared fixtures for all test modules."""
+"""Shared fixtures, hooks, and logging setup for all test modules.
+
+Provides:
+- Allure results directory configuration
+- Timestamped per-run log files with per-test slicing attached to Allure
+- Screenshot capture on test failure
+- Session-scoped API client fixtures
+- Class-scoped ``shared_page`` and ``shared_context`` fixtures for E2E workflows
+"""
 import dataclasses
 import json
 import logging
@@ -18,7 +26,6 @@ from src.config.environment import ENV
 
 def pytest_configure(config):
     """Set the Allure results directory if not already provided via CLI."""
-    
     if not config.getoption("alluredir", default=None):
         results_dir = Path(ENV.allure_results_dir)
         results_dir.mkdir(parents=True, exist_ok=True)
@@ -32,6 +39,10 @@ _log_read_offset: int = 0
 
 
 def _setup_logging() -> logging.Logger:
+    """Create a timestamped log file and configure the ``parabank`` logger hierarchy.
+
+    :returns: The root ``parabank`` logger instance.
+    """
     global _log_file_path
 
     log_dir = Path(ENV.log_dir)
@@ -63,16 +74,23 @@ logger = _setup_logging()
 
 
 def pytest_runtest_logstart(nodeid):
+    """Log a banner when a test starts running."""
     logger.info("───────────────────────── STARTED  %s ─────────────────────────", nodeid)
 
 
 def pytest_runtest_logfinish(nodeid):
+    """Log a banner when a test finishes running."""
     logger.info("───────────────────────── FINISHED %s ─────────────────────────", nodeid)
 
 
 def _flush_and_read_new_log_lines() -> str:
-    """Flush the file handler and return log content written since the last read."""
+    """Flush the file handler and return log content written since the last read.
 
+    Tracks a global offset so each call returns only *new* lines,
+    enabling per-test log slicing in the Allure report.
+
+    :returns: Log text since the previous call (or empty string).
+    """
     global _log_read_offset
 
     if not _log_file_path or not _log_file_path.exists():
@@ -92,7 +110,6 @@ def _flush_and_read_new_log_lines() -> str:
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
     """Log test outcomes, attach per-test log slice + shared_context, and capture a screenshot on failure."""
-
     outcome = yield
     report = outcome.get_result()
 
@@ -118,6 +135,7 @@ def pytest_runtest_makereport(item, call):
     shared_ctx = item.funcargs.get("shared_context")
     if shared_ctx:
         def _serialize(obj):
+            """JSON serializer that converts dataclass instances to dicts."""
             if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
                 return dataclasses.asdict(obj)
             return str(obj)
@@ -152,6 +170,7 @@ def pytest_runtest_makereport(item, call):
 
 @pytest.fixture(scope="session")
 def browser_context_args(browser_context_args):
+    """Override default browser context args with a 1280x720 viewport and HTTPS error tolerance."""
     return {
         **browser_context_args,
         "viewport": {"width": 1280, "height": 720},
@@ -161,6 +180,7 @@ def browser_context_args(browser_context_args):
 
 @pytest.fixture(scope="session")
 def browser_type_launch_args(browser_type_launch_args):
+    """Override default browser launch args with headless/slow_mo from environment."""
     return {
         **browser_type_launch_args,
         "headless": ENV.headless,
@@ -172,6 +192,7 @@ def browser_type_launch_args(browser_type_launch_args):
 
 @pytest.fixture(scope="session")
 def api_client():
+    """Session-scoped :class:`ApiClient` reused across all tests."""
     client = ApiClient(ENV.api_base_url)
     yield client
     client.close()
@@ -179,11 +200,13 @@ def api_client():
 
 @pytest.fixture(scope="session")
 def customer_api(api_client: ApiClient) -> CustomerApi:
+    """Session-scoped :class:`CustomerApi` backed by the shared API client."""
     return CustomerApi(api_client)
 
 
 @pytest.fixture(scope="session")
 def account_api(api_client: ApiClient) -> AccountApi:
+    """Session-scoped :class:`AccountApi` backed by the shared API client."""
     return AccountApi(api_client)
 
 
@@ -191,8 +214,7 @@ def account_api(api_client: ApiClient) -> AccountApi:
 
 @pytest.fixture(scope="class")
 def shared_page(browser) -> Iterator[Page]:
-    """Class-scoped page so the browser session persists across ordered test methods."""
-
+    """Class-scoped Playwright Page so the browser session persists across ordered test methods."""
     context = browser.new_context(
         viewport={"width": 1280, "height": 720},
         ignore_https_errors=True,
@@ -207,5 +229,4 @@ def shared_page(browser) -> Iterator[Page]:
 @pytest.fixture(scope="class")
 def shared_context() -> dict:
     """Mutable dict shared across all tests within a class for passing workflow data."""
-
     return {}

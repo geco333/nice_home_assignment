@@ -1,8 +1,10 @@
+"""Page Object for the ParaBank user registration page."""
 from src.models.customer import CustomerRegistration
 from src.pages.base_page import BasePage
 
 
 class RegisterPage(BasePage):
+    """Encapsulates interactions with the ParaBank registration form."""
 
     PATH = "register.htm"
 
@@ -24,10 +26,18 @@ class RegisterPage(BasePage):
     ERROR_MESSAGES = "span.error"
 
     def open(self) -> "RegisterPage":
+        """Navigate to the registration page.
+
+        :returns: Self for method chaining.
+        """
         self.navigate(self.PATH)
         return self
 
     def register(self, customer: CustomerRegistration) -> None:
+        """Fill and submit the registration form with the given customer data.
+
+        :param customer: CustomerRegistration dataclass with all required fields.
+        """
         self.page.fill(self.FIRST_NAME, customer.first_name)
         self.page.fill(self.LAST_NAME, customer.last_name)
         self.page.fill(self.ADDRESS, customer.address.street)
@@ -44,10 +54,16 @@ class RegisterPage(BasePage):
         self.page.wait_for_load_state("domcontentloaded")
 
     def get_success_heading(self) -> str:
+        """Return the heading text shown after successful registration (e.g. 'Welcome ...')."""
         return self.page.locator(self.SUCCESS_HEADING).inner_text()
 
     def get_success_message(self) -> str:
+        """Return the success paragraph text (e.g. 'Your account was created successfully.')."""
         return self.page.locator(self.SUCCESS_MESSAGE).inner_text()
 
     def get_error_messages(self) -> list[str]:
+        """Return all validation error messages displayed on the form.
+
+        :returns: List of error strings; empty if no errors are shown.
+        """
         return self.page.locator(self.ERROR_MESSAGES).all_inner_texts()

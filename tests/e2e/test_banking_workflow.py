@@ -26,6 +26,13 @@ logger = logging.getLogger("parabank.e2e")
 
 
 def register_customer(shared_context: dict) -> CustomerRegistration:
+    """Generate random customer data and store it in the shared context.
+
+    Populates ``shared_context["customer_data"]`` and ``shared_context["credentials"]``.
+
+    :param shared_context: Mutable dict for inter-test data sharing.
+    :returns: The generated :class:`CustomerRegistration`.
+    """
     customer_data = create_customer_registration()
     credentials = credentials_from(customer_data)
     
@@ -34,7 +41,15 @@ def register_customer(shared_context: dict) -> CustomerRegistration:
 
 
 def setup_accounts(shared_context: dict, customer_api: CustomerApi, account_api: AccountApi) -> None:
-    """Fetch customer ID, existing account, and create a new CHECKING account. Stores results in shared_context."""
+    """Fetch customer ID, existing account, and create a new CHECKING account.
+
+    Stores ``customer_id``, ``existing_account_id``, and ``new_account_id``
+    in the shared context.
+
+    :param shared_context: Mutable dict for inter-test data sharing (must contain ``credentials``).
+    :param customer_api: API client for customer operations.
+    :param account_api: API client for account operations.
+    """
     credentials = shared_context["credentials"]
     customer_id = customer_api.get_customer_id(credentials.username, credentials.password)
     accounts = account_api.get_customer_accounts(customer_id)
