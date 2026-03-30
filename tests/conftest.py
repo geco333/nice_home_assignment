@@ -178,10 +178,15 @@ def pytest_runtest_makereport(item, call):
 
 @pytest.fixture(scope="session")
 def browser_context_args(browser_context_args):
-    """Override default browser context args with a 1280x720 viewport and HTTPS error tolerance."""
+    """Override default browser context args: maximized viewport and HTTPS error tolerance.
+
+    Headed mode: ``viewport=None`` + ``--start-maximized`` fills the screen.
+    Headless mode: uses a 1920x1080 viewport since there is no physical screen.
+    """
+    viewport = None if not ENV.headless else {"width": 1920, "height": 1080}
     return {
         **browser_context_args,
-        "viewport": {"width": 1280, "height": 720},
+        "viewport": viewport,
         "ignore_https_errors": True,
     }
 
@@ -189,10 +194,14 @@ def browser_context_args(browser_context_args):
 @pytest.fixture(scope="session")
 def browser_type_launch_args(browser_type_launch_args):
     """Override default browser launch args with headless/slow_mo from environment."""
+    args = list(browser_type_launch_args.get("args", []))
+    if not ENV.headless:
+        args.append("--start-maximized")
     return {
         **browser_type_launch_args,
         "headless": ENV.headless,
         "slow_mo": ENV.slow_mo,
+        "args": args,
     }
 
 
@@ -225,8 +234,9 @@ def account_api(api_client: ApiClient) -> AccountApi:
 @pytest.fixture(scope="class")
 def shared_page(browser) -> Iterator[Page]:
     """Class-scoped Playwright Page so the browser session persists across ordered test methods."""
+    viewport = None if not ENV.headless else {"width": 1920, "height": 1080}
     context = browser.new_context(
-        viewport={"width": 1280, "height": 720},
+        viewport=viewport,
         ignore_https_errors=True,
     )
     page = context.new_page()

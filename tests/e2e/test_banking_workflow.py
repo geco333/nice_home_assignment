@@ -79,6 +79,9 @@ class TestBankingUI:
     @allure.severity(allure.severity_level.BLOCKER)
     @allure.title("Register a new customer")
     def test_register_new_user(self, shared_page: Page, shared_context: dict):
+        """Register a new user via the UI form, verify the welcome heading and
+        success message, then log out so subsequent tests start unauthenticated."""
+
         customer_data = create_customer_registration()
         shared_context["customer_data"] = customer_data
         shared_context["credentials"] = credentials_from(customer_data)
@@ -119,6 +122,10 @@ class TestBankingUI:
     @allure.severity(allure.severity_level.BLOCKER)
     @allure.title("Login with registered credentials")
     def test_login(self, shared_page: Page, shared_context: dict, customer_api: CustomerApi):
+        """Log in with the previously registered credentials and verify the
+        page redirects to the Accounts Overview.  If run standalone, provisions
+        a user via API first."""
+
         logger.info("🏦 Fetching customer data ...")
 
         if not shared_context.get('credentials'):
@@ -152,6 +159,10 @@ class TestBankingUI:
                                       shared_context: dict,
                                       customer_api: CustomerApi,
                                       account_api: AccountApi):
+        """Create a new CHECKING account via curl and confirm it appears in the
+        Accounts Overview table.  Recovers login/registration state when run
+        independently."""
+
         logger.info("🏦 Fetching customer data and creating new checking account")
 
         if not shared_context.get('credentials'):
@@ -206,6 +217,10 @@ class TestBankingUI:
     @allure.title("Transfer money between accounts")
     def test_transfer_funds(self, shared_page: Page, shared_context: dict,
                             customer_api: CustomerApi, account_api: AccountApi):
+        """Transfer a random amount between the existing and new accounts via
+        the UI and assert the 'Transfer Complete' confirmation heading.
+        Recovers credentials and account data when run independently."""
+
         if not shared_context.get('credentials'):
             register_customer(shared_context)
 
@@ -251,6 +266,9 @@ class TestBankingUI:
     @allure.severity(allure.severity_level.NORMAL)
     @allure.title("Logout and verify login form is displayed")
     def test_logout(self, shared_page: Page):
+        """Click the Log Out link and verify the login form (username and
+        password fields) is visible again."""
+
         logger.info("🚪 Logging out...")
 
         with allure.step("Click Log Out"):
@@ -278,6 +296,9 @@ class TestBankingAPI:
     @allure.severity(allure.severity_level.BLOCKER)
     @allure.title("Register user via API (setup for API tests)")
     def test_register_user(self, shared_context: dict, customer_api: CustomerApi):
+        """Register a new user via HTTP form POST and verify the account is
+        accessible by logging in through the REST API."""
+
         customer_data = create_customer_registration()
         shared_context["customer_data"] = customer_data
         shared_context["credentials"] = credentials_from(customer_data)
@@ -298,6 +319,9 @@ class TestBankingAPI:
     @allure.severity(allure.severity_level.CRITICAL)
     @allure.title("Retrieve customer ID via API login")
     def test_get_customer_id(self, shared_context: dict, customer_api: CustomerApi):
+        """Call the login endpoint and assert a positive integer customer ID is
+        returned."""
+
         credentials = shared_context["credentials"]
         logger.info("🔍 Looking up customer ID for '%s' via API",
                     credentials.username)
@@ -318,6 +342,9 @@ class TestBankingAPI:
     @allure.severity(allure.severity_level.CRITICAL)
     @allure.title("Validate customer details match registration data")
     def test_validate_customer_details(self, shared_context: dict, customer_api: CustomerApi):
+        """Fetch the customer record by ID and assert every field (name,
+        address) matches the original registration data."""
+        
         customer_data = shared_context["customer_data"]
         customer_id = shared_context["customer_id"]
        
@@ -344,6 +371,8 @@ class TestBankingAPI:
     @allure.severity(allure.severity_level.CRITICAL)
     @allure.title("Retrieve existing account for customer")
     def test_get_existing_account(self, shared_context: dict, account_api: AccountApi):
+        """Fetch all accounts for the customer and verify at least one exists
+        with a valid ID and matching customer ownership."""
         customer_id = shared_context["customer_id"]
         logger.info("🏦 Fetching accounts for customer %d", customer_id)
 
@@ -370,6 +399,9 @@ class TestBankingAPI:
     @allure.severity(allure.severity_level.CRITICAL)
     @allure.title("Create new CHECKING account via curl")
     def test_create_checking_account_via_curl(self, shared_context: dict, account_api: AccountApi):
+        """Create a CHECKING account using a curl subprocess and assert the
+        returned account has a valid ID, correct type, and belongs to the
+        customer."""
         customer_id = shared_context["customer_id"]
         existing_account_id = shared_context["existing_account_id"]
      
@@ -397,6 +429,9 @@ class TestBankingAPI:
     @allure.severity(allure.severity_level.CRITICAL)
     @allure.title("Transfer funds via API and validate balances")
     def test_transfer_and_validate_balances(self, shared_context: dict, account_api: AccountApi):
+        """Transfer a random amount between accounts via the REST API, then
+        verify both the source and destination balances changed by exactly
+        the transfer amount."""
         existing_account_id = shared_context["existing_account_id"]
         new_account_id = shared_context["new_account_id"]
         transfer_amount = random_transfer_amount(min_val=5, max_val=50)

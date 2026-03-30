@@ -33,17 +33,18 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 sh '''
-                    pip install -r requirements.txt
-                    python -m playwright install --with-deps chromium
+                    pip install uv
+                    uv pip install -r requirements.txt
+                    uv python -m playwright install --with-deps chromium
                 '''
             }
         }
-        stage('Run Negative Tests') {
+        stage('Negative Tests') {
             steps {
                 sh 'pytest tests/negative/ -m negative'
             }
         }
-        stage("Run E2E Tests") {
+        stage("E2E Tests") {
             steps {
                 sh 'pytest tests/e2e/ -m e2e'
             }
@@ -75,10 +76,10 @@ pipeline {
 
             archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
         }
-        success {
         failure {
             echo 'Tests failed — check the Allure report for details.'
         }
+        // Remove local image.
         cleanup {
             sh "docker rmi ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} || true"
             sh "docker rmi ${REGISTRY}/${IMAGE_NAME}:latest || true"
