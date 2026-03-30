@@ -1,7 +1,7 @@
 pipeline {
     agent any
 
-    // In production/dev runs all environment variables are exported from
+    // In dev/staging/production runs all environment variables are exported from
     // a dedicated configuration file reterived from remote storage.
     environment {
         BASE_URL         = 'https://parabank.parasoft.com/parabank'
@@ -12,6 +12,10 @@ pipeline {
         REGISTRY         = "${params.DOCKER_REGISTRY ?: 'docker.io/myorg'}"
         IMAGE_NAME       = 'parabank-tests'
         IMAGE_TAG        = "${env.BUILD_NUMBER}-${env.GIT_COMMIT?.take(7) ?: 'latest'}"
+    }
+
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'production'], description: 'The environment to run the tests in')
     }
 
     options {

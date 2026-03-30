@@ -1,13 +1,145 @@
 """Shared fixtures for all test modules."""
+import dataclasses
+import json
+import logging
+import os
+from datetime import datetime
+from pathlib import Path
 from typing import Iterator
 
+import allure
 import pytest
 from playwright.sync_api import Page
 
+from src.api.account_api import AccountApi
 from src.api.api_client import ApiClient
 from src.api.customer_api import CustomerApi
-from src.api.account_api import AccountApi
 from src.config.environment import ENV
+
+os.environ.setdefault("PYTEST_ADDOPTS", f"--alluredir={ENV.allure_results_dir}")
+
+
+# ── Logging setup ────────────────────────────────────────────
+
+_log_file_path: Path | None = None
+_log_read_offset: int = 0
+
+
+def _setup_logging() -> logging.Logger:
+    global _log_file_path
+
+    log_dir = Path(ENV.log_dir)
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    _log_file_path = log_dir / f"test_run_{timestamp}.log"
+
+    _logger = logging.getLogger("parabank")
+    _logger.setLevel(logging.DEBUG)
+
+    file_handler = logging.FileHandler(_log_file_path, encoding="utf-8")
+    file_handler.setLevel(logging.DEBUG)
+
+    formatter = logging.Formatter(
+        "[%(asctime)s][%(name)s][%(levelname)s %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    file_handler.setFormatter(formatter)
+
+    _logger.addHandler(file_handler)
+    _logger.propagate = False
+    _logger.info("Log file: %s", _log_file_path)
+
+    return _logger
+
+
+logger = _setup_logging()
+
+
+def pytest_runtest_logstart(nodeid, location):
+    logger.info("───────────────────────── STARTED  %s ─────────────────────────", nodeid)
+
+
+def pytest_runtest_logfinish(nodeid, exitstatus):
+    logger.info("───────────────────────── FINISHED %s ─────────────────────────", nodeid)
+
+
+def _flush_and_read_new_log_lines() -> str:
+    """Flush the file handler and return log content written since the last read."""
+
+    global _log_read_offset
+
+    if not _log_file_path or not _log_file_path.exists():
+        return ""
+
+    for handler in logger.handlers:
+        handler.flush()
+
+    with open(_log_file_path, encoding="utf-8") as f:
+        f.seek(_log_read_offset)
+        content = f.read()
+        _log_read_offset = f.tell()
+
+    return content
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Log test outcomes, attach per-test log slice + shared_context, and capture a screenshot on failure."""
+
+    outcome = yield
+    report = outcome.get_result()
+
+    if report.when != "call":
+        return
+
+    if report.passed:
+        logger.info("PASSED   %s", item.nodeid)
+    elif report.skipped:
+        logger.warning("SKIPPED  %s", item.nodeid)
+    else:
+        logger.error("FAILED   %s", item.nodeid)
+
+    log_slice = _flush_and_read_new_log_lines()
+
+    if log_slice and _log_file_path:
+        allure.attach(
+            log_slice,
+            name=_log_file_path.name,
+            attachment_type=allure.attachment_type.TEXT,
+        )
+
+    shared_ctx = item.funcargs.get("shared_context")
+    if shared_ctx:
+        def _serialize(obj):
+            if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+                return dataclasses.asdict(obj)
+            return str(obj)
+
+        allure.attach(
+            json.dumps(shared_ctx, indent=2, default=_serialize),
+            name="shared_context",
+            attachment_type=allure.attachment_type.JSON,
+        )
+
+    if not report.failed:
+        return
+
+    page = item.funcargs.get("shared_page") or item.funcargs.get("page")
+    if page is None:
+        return
+
+    screenshot_dir = Path(ENV.screenshot_dir)
+    screenshot_dir.mkdir(parents=True, exist_ok=True)
+    test_name = item.nodeid.replace("::", "_").replace("/", "_").replace("\\", "_")
+    path = screenshot_dir / f"{test_name}.png"
+
+    try:
+        page.screenshot(path=str(path), full_page=True)
+        allure.attach.file(str(path), name=test_name, attachment_type=allure.attachment_type.PNG)
+        logger.info("Screenshot saved: %s", path)
+    except Exception as exc:
+        logger.warning("Screenshot failed: %s", exc)
 
 
 # ── Playwright browser configuration ─────────────────────────
@@ -54,20 +186,20 @@ def account_api(api_client: ApiClient) -> AccountApi:
 @pytest.fixture(scope="class")
 def shared_page(browser) -> Iterator[Page]:
     """Class-scoped page so the browser session persists across ordered test methods."""
-    
+
     context = browser.new_context(
         viewport={"width": 1280, "height": 720},
         ignore_https_errors=True,
     )
     page = context.new_page()
-    
+
     yield page
-    
+
     context.close()
 
 
 @pytest.fixture(scope="class")
 def shared_context() -> dict:
     """Mutable dict shared across all tests within a class for passing workflow data."""
-    
+
     return {}

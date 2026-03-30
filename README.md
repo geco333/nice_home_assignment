@@ -110,14 +110,16 @@ nice_home_assignment/
 
 **Layered architecture** with strict separation of concerns:
 
-| Layer | Purpose |
-|-------|---------|
-| **Models** | Typed dataclasses representing domain entities — no behavior, just structure |
-| **Pages** | Page Object Model encapsulating UI locators and interactions |
-| **API** | `requests`-based REST clients for backend validation |
-| **Utils** | Stateless helper functions (data generation, parsing) |
-| **Config** | Single source of truth for environment variables |
-| **Fixtures** | pytest/Playwright fixture composition wiring everything together |
+
+| Layer        | Purpose                                                                      |
+| ------------ | ---------------------------------------------------------------------------- |
+| **Models**   | Typed dataclasses representing domain entities — no behavior, just structure |
+| **Pages**    | Page Object Model encapsulating UI locators and interactions                 |
+| **API**      | `requests`-based REST clients for backend validation                         |
+| **Utils**    | Stateless helper functions (data generation, parsing)                        |
+| **Config**   | Single source of truth for environment variables                             |
+| **Fixtures** | pytest/Playwright fixture composition wiring everything together             |
+
 
 This means tests read like specifications and contain zero locator strings or HTTP calls directly.
 
@@ -134,6 +136,7 @@ This hybrid approach catches both rendering issues and data-layer bugs.
 ### 3. Page Object Model (POM)
 
 Each page extends `BasePage`, which provides:
+
 - Navigation helpers with automatic `domcontentloaded` waits
 - Text extraction and visibility assertion methods
 - Consistent patterns that scale as more pages are added
@@ -144,14 +147,16 @@ Locators are class-level constants — easy to update when the DOM changes witho
 
 ## Tradeoffs
 
-| Decision | Benefit | Cost |
-|----------|---------|------|
-| **Single sequential E2E test** | Tests the full flow as a real user would; catches integration issues between steps | Slower than isolated unit tests; a mid-step failure blocks downstream assertions |
-| **`requests` library for API** | Lightweight, well-known, synchronous — matches Playwright sync mode | Doesn't share Playwright's cookie jar; API calls are independent sessions |
-| **curl via subprocess** | Meets the assignment requirement verbatim | Platform-dependent (curl must be installed); harder to assert HTTP status codes |
-| **Session-scoped API client** | One HTTP session reused across tests for efficiency | Must be careful with session state between test classes |
-| **`pytest-playwright` plugin** | Automatic browser/page lifecycle, screenshot-on-failure, tracing | Couples the framework to pytest (not a real drawback for most teams) |
-| **Random test data** | Each run is independent — no stale-data collisions | Non-deterministic; if a test fails, you need the logs to reproduce the exact data used |
+
+| Decision                       | Benefit                                                                            | Cost                                                                                   |
+| ------------------------------ | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **Single sequential E2E test** | Tests the full flow as a real user would; catches integration issues between steps | Slower than isolated unit tests; a mid-step failure blocks downstream assertions       |
+| `**requests` library for API** | Lightweight, well-known, synchronous — matches Playwright sync mode                | Doesn't share Playwright's cookie jar; API calls are independent sessions              |
+| **curl via subprocess**        | Meets the assignment requirement verbatim                                          | Platform-dependent (curl must be installed); harder to assert HTTP status codes        |
+| **Session-scoped API client**  | One HTTP session reused across tests for efficiency                                | Must be careful with session state between test classes                                |
+| `**pytest-playwright` plugin** | Automatic browser/page lifecycle, screenshot-on-failure, tracing                   | Couples the framework to pytest (not a real drawback for most teams)                   |
+| **Random test data**           | Each run is independent — no stale-data collisions                                 | Non-deterministic; if a test fails, you need the logs to reproduce the exact data used |
+
 
 ---
 
@@ -206,6 +211,7 @@ The GitHub Actions workflow (`.github/workflows/ci.yml`):
 5. 30-minute timeout prevents runaway jobs.
 
 For larger teams, this extends naturally to:
+
 - **Matrix builds** across Python versions or browser engines.
 - **Sharding** via `pytest-xdist` for parallel execution.
 - **Scheduled nightly runs** for regression.
@@ -230,3 +236,4 @@ The `Dockerfile` uses Microsoft's official `playwright/python` image which inclu
 6. **Multiple environments**: Swap `.env` files or use `ENV=staging pytest` to switch targets.
 7. **Visual regression**: Add `pytest-playwright-visual` for screenshot comparison.
 8. **API contract testing**: Validate response JSON against schemas using `jsonschema` or Pydantic.
+
