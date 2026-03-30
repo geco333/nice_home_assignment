@@ -25,11 +25,17 @@ from src.config.environment import ENV
 
 
 def pytest_configure(config):
-    """Set the Allure results directory if not already provided via CLI."""
-    if not config.getoption("alluredir", default=None):
+    """Set the Allure results directory from ``.env`` if not provided via CLI.
+
+    Conftest ``pytest_configure`` hooks run before installed-plugin hooks
+    (pluggy LIFO order), so setting ``allure_report_dir`` here ensures the
+    ``allure-pytest`` plugin sees it when its own ``pytest_configure`` runs
+    immediately after.
+    """
+    if not config.option.allure_report_dir:
         results_dir = Path(ENV.allure_results_dir)
         results_dir.mkdir(parents=True, exist_ok=True)
-        config.option.alluredir = str(results_dir)
+        config.option.allure_report_dir = str(results_dir)
 
 
 # ── Logging setup ────────────────────────────────────────────
@@ -133,6 +139,7 @@ def pytest_runtest_makereport(item, call):
         )
 
     shared_ctx = item.funcargs.get("shared_context")
+    
     if shared_ctx:
         def _serialize(obj):
             """JSON serializer that converts dataclass instances to dicts."""
@@ -150,6 +157,7 @@ def pytest_runtest_makereport(item, call):
         return
 
     page = item.funcargs.get("shared_page") or item.funcargs.get("page")
+    
     if page is None:
         return
 
@@ -194,7 +202,9 @@ def browser_type_launch_args(browser_type_launch_args):
 def api_client():
     """Session-scoped :class:`ApiClient` reused across all tests."""
     client = ApiClient(ENV.api_base_url)
+    
     yield client
+    
     client.close()
 
 

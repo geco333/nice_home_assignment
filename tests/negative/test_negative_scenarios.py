@@ -30,6 +30,7 @@ class TestNegativeUI:
     @allure.title("Login with invalid credentials shows error")
     def test_login_invalid_credentials(self, page: Page):
         logger.info("🔐 Attempting login with invalid credentials")
+        
         with allure.step("Attempt login with wrong username/password"):
             login_page = LoginPage(page, ENV.base_url)
             login_page.open()
@@ -38,6 +39,7 @@ class TestNegativeUI:
         with allure.step("Verify error message is displayed"):
             error = login_page.get_error_message()
             logger.info("🚫 Error message received: %s", error)
+            
             assert "error" in error.lower() or "not recognized" in error.lower() or "could not be verified" in error.lower(), (
                 f"Expected login error message, got: {error}"
             )
