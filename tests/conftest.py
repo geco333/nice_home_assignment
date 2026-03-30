@@ -2,7 +2,6 @@
 import dataclasses
 import json
 import logging
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Iterator
@@ -16,7 +15,14 @@ from src.api.api_client import ApiClient
 from src.api.customer_api import CustomerApi
 from src.config.environment import ENV
 
-os.environ.setdefault("PYTEST_ADDOPTS", f"--alluredir={ENV.allure_results_dir}")
+
+def pytest_configure(config):
+    """Set the Allure results directory if not already provided via CLI."""
+    
+    if not config.getoption("alluredir", default=None):
+        results_dir = Path(ENV.allure_results_dir)
+        results_dir.mkdir(parents=True, exist_ok=True)
+        config.option.alluredir = str(results_dir)
 
 
 # ── Logging setup ────────────────────────────────────────────
@@ -56,11 +62,11 @@ def _setup_logging() -> logging.Logger:
 logger = _setup_logging()
 
 
-def pytest_runtest_logstart(nodeid, location):
+def pytest_runtest_logstart(nodeid):
     logger.info("───────────────────────── STARTED  %s ─────────────────────────", nodeid)
 
 
-def pytest_runtest_logfinish(nodeid, exitstatus):
+def pytest_runtest_logfinish(nodeid):
     logger.info("───────────────────────── FINISHED %s ─────────────────────────", nodeid)
 
 
