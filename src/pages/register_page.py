@@ -6,7 +6,6 @@ class RegisterPage(BasePage):
 
     PATH = "register.htm"
 
-    # Form field locators
     FIRST_NAME = "#customer\\.firstName"
     LAST_NAME = "#customer\\.lastName"
     ADDRESS = "#customer\\.address\\.street"
@@ -26,7 +25,6 @@ class RegisterPage(BasePage):
 
     def open(self) -> "RegisterPage":
         self.navigate(self.PATH)
-        
         return self
 
     def register(self, customer: CustomerRegistration) -> None:
@@ -41,15 +39,15 @@ class RegisterPage(BasePage):
         self.page.fill(self.USERNAME, customer.username)
         self.page.fill(self.PASSWORD, customer.password)
         self.page.fill(self.CONFIRM_PASSWORD, customer.password)
-        
+
         self.page.click(self.REGISTER_BTN)
         self.page.wait_for_load_state("domcontentloaded")
 
     def get_success_heading(self) -> str:
-        return self.get_text(self.SUCCESS_HEADING)
+        return self.page.locator(self.SUCCESS_HEADING).inner_text()
 
     def get_success_message(self) -> str:
-        return self.get_text(self.SUCCESS_MESSAGE)
+        return self.page.locator(self.SUCCESS_MESSAGE).inner_text()
 
     def get_error_messages(self) -> list[str]:
         return self.page.locator(self.ERROR_MESSAGES).all_inner_texts()

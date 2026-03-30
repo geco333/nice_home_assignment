@@ -23,4 +23,4 @@ class OpenAccountPage(BasePage):
             self.page.select_option(self.FROM_ACCOUNT_SELECT, from_account_id)
         self.page.click(self.OPEN_ACCOUNT_BTN)
         self.page.wait_for_selector(self.NEW_ACCOUNT_ID, timeout=10000)
-        return self.get_text(self.NEW_ACCOUNT_ID)
+        return self.page.locator(self.NEW_ACCOUNT_ID).inner_text()

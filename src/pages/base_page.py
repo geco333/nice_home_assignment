@@ -1,8 +1,29 @@
-from playwright.sync_api import Page, expect
+import inspect
+
+from playwright.sync_api import Page
+
+from src.config.environment import ENV
+from src.utils.retry import retry_on_failure
 
 
 class BasePage:
-    """Base page providing shared navigation and assertion helpers."""
+    """Base page providing shared navigation helpers.
+
+    All public methods defined in subclasses are automatically wrapped
+    with a retry-on-failure decorator via ``__init_subclass__``.
+    Retry count and delay are read from environment variables
+    ``RETRY_COUNT`` and ``RETRY_DELAY``.
+    """
+
+    RETRY_COUNT = ENV.retry_count
+    RETRY_DELAY = ENV.retry_delay
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+
+        for name, method in list(vars(cls).items()):
+            if not name.startswith("_") and inspect.isfunction(method):
+                setattr(cls, name, retry_on_failure(cls.RETRY_COUNT, cls.RETRY_DELAY)(method))
 
     def __init__(self, page: Page, base_url: str):
         self.page = page
@@ -14,19 +35,3 @@ class BasePage:
 
     def get_title(self) -> str:
         return self.page.title()
-
-    def get_text(self, selector: str) -> str:
-        return self.page.locator(selector).inner_text()
-
-    def is_visible(self, selector: str) -> bool:
-        return self.page.locator(selector).is_visible()
-
-    def expect_visible(self, selector: str) -> None:
-        expect(self.page.locator(selector)).to_be_visible()
-
-    def expect_text_contains(self, selector: str, text: str) -> None:
-        expect(self.page.locator(selector)).to_contain_text(text)
-
-    def click_link(self, text: str) -> None:
-        self.page.get_by_role("link", name=text).click()
-        self.page.wait_for_load_state("domcontentloaded")

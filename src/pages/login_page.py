@@ -23,7 +23,7 @@ class LoginPage(BasePage):
         self.page.wait_for_load_state("domcontentloaded")
 
     def get_error_message(self) -> str:
-        return self.get_text(self.ERROR_MESSAGE)
+        return self.page.locator(self.ERROR_MESSAGE).inner_text()
 
     def get_welcome_message(self) -> str:
         return self.page.locator("#rightPanel h1").first.inner_text()

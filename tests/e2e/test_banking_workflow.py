@@ -33,6 +33,25 @@ def register_customer(shared_context: dict) -> CustomerRegistration:
     shared_context["credentials"] = credentials
 
 
+def setup_accounts(shared_context: dict, customer_api: CustomerApi, account_api: AccountApi) -> None:
+    """Fetch customer ID, existing account, and create a new CHECKING account. Stores results in shared_context."""
+    credentials = shared_context["credentials"]
+    customer_id = customer_api.get_customer_id(credentials.username, credentials.password)
+    accounts = account_api.get_customer_accounts(customer_id)
+    existing_account_id = accounts[0].id
+    new_account = account_api.create_account_via_curl(
+        customer_id=customer_id,
+        new_account_type=AccountType.CHECKING,
+        from_account_id=existing_account_id,
+    )
+
+    shared_context["customer_id"] = customer_id
+    shared_context["existing_account_id"] = existing_account_id
+    shared_context["new_account_id"] = new_account.id
+
+    logger.info("🔧 Setup: accounts ready — existing=%d, new=%d", existing_account_id, new_account.id)
+
+
 # ── UI tests ──────────────────────────────────────────────────
 
 @pytest.mark.e2e
@@ -43,7 +62,7 @@ class TestBankingUI:
 
     @allure.story("User Registration")
     @allure.severity(allure.severity_level.BLOCKER)
-    @allure.title("Register a new user via UI")
+    @allure.title("Register a new customer")
     def test_register_new_user(self, shared_page: Page, shared_context: dict):
         customer_data = create_customer_registration()
         shared_context["customer_data"] = customer_data
@@ -55,17 +74,20 @@ class TestBankingUI:
             register_page = RegisterPage(shared_page, ENV.base_url)
             register_page.open()
             register_page.register(customer_data)
+          
             logger.debug("📋 Registration form submitted for %s %s",
                          customer_data.first_name, customer_data.last_name)
 
         with allure.step("Verify welcome heading"):
             welcome_heading = register_page.get_success_heading()
+         
             logger.info("🎉 Welcome heading received: %s", welcome_heading)
 
             assert "Welcome" in welcome_heading, f"Expected welcome heading, got: {welcome_heading}"
 
         with allure.step("Verify success message"):
             success_msg = register_page.get_success_message()
+         
             logger.info("✅ Registration success message: %s", success_msg)
 
             assert "created successfully" in success_msg.lower() or customer_data.username in success_msg, (
@@ -75,6 +97,7 @@ class TestBankingUI:
         with allure.step("Log out after auto-login"):
             shared_page.locator("a:text('Log Out')").click()
             shared_page.wait_for_load_state("domcontentloaded")
+        
             logger.info("🚪 Logged out after auto-login")
 
     @allure.story("User Login")
@@ -118,9 +141,15 @@ class TestBankingUI:
 
         if not shared_context.get('credentials'):
             register_customer(shared_context)
-            
+
             with allure.step("Register a new user via API"):
                 customer_api.register(shared_context['customer_data'], ENV.base_url)
+
+            with allure.step("Login via UI"):
+                login_page = LoginPage(shared_page, ENV.base_url)
+                login_page.open()
+                login_page.login(shared_context['credentials'])
+                logger.info("🔑 Logged in as '%s'", shared_context['credentials'].username)
 
         credentials = shared_context['credentials']
 
@@ -159,13 +188,24 @@ class TestBankingUI:
 
     @allure.story("Fund Transfer")
     @allure.severity(allure.severity_level.CRITICAL)
-    @allure.title("Transfer money between accounts via UI")
-    def test_transfer_funds(self, shared_page: Page, shared_context: dict):
+    @allure.title("Transfer money between accounts")
+    def test_transfer_funds(self, shared_page: Page, shared_context: dict,
+                            customer_api: CustomerApi, account_api: AccountApi):
         if not shared_context.get('credentials'):
             register_customer(shared_context)
-            
+
             with allure.step("Register a new user via API"):
                 customer_api.register(shared_context['customer_data'], ENV.base_url)
+
+            with allure.step("Login"):
+                login_page = LoginPage(shared_page, ENV.base_url)
+                login_page.open()
+                login_page.login(shared_context['credentials'])
+                logger.info("🔑 Logged in as '%s'", shared_context['credentials'].username)
+
+        if "existing_account_id" not in shared_context or "new_account_id" not in shared_context:
+            with allure.step("Setup accounts via API"):
+                setup_accounts(shared_context, customer_api, account_api)
 
         existing_account_id = shared_context["existing_account_id"]
         new_account_id = shared_context["new_account_id"]
@@ -187,6 +227,7 @@ class TestBankingUI:
         with allure.step("Verify 'Transfer Complete' confirmation"):
             success_heading = transfer_page.get_success_heading()
             logger.info("🎯 Transfer result: %s", success_heading)
+
             assert "Transfer Complete" in success_heading, (
                 f"Expected 'Transfer Complete', got: {success_heading}"
             )
@@ -233,7 +274,9 @@ class TestBankingAPI:
         with allure.step("Verify user can login via API"):
             customer_id = customer_api.get_customer_id(
                 customer_data.username, customer_data.password)
+                
             assert customer_id > 0, f"Expected valid customer ID after registration, got: {customer_id}"
+
             logger.info("✅ User registered — customer ID: %d", customer_id)
 
     @allure.story("Customer Data")
@@ -262,10 +305,12 @@ class TestBankingAPI:
     def test_validate_customer_details(self, shared_context: dict, customer_api: CustomerApi):
         customer_data = shared_context["customer_data"]
         customer_id = shared_context["customer_id"]
+       
         logger.info("🧾 Validating customer details for ID %d", customer_id)
 
         with allure.step(f"GET /customers/{customer_id}"):
             customer = customer_api.get_customer(customer_id)
+          
             logger.debug("📦 API response: %s %s, %s, %s",
                          customer.first_name, customer.last_name,
                          customer.address.city, customer.address.state)
@@ -277,6 +322,7 @@ class TestBankingAPI:
             assert customer.address.city == customer_data.address.city
             assert customer.address.state == customer_data.address.state
             assert customer.address.zip_code == customer_data.address.zip_code
+        
             logger.info("✅ All customer fields match registration data")
 
     @allure.story("Account Management")
@@ -288,14 +334,18 @@ class TestBankingAPI:
 
         with allure.step(f"GET /customers/{customer_id}/accounts"):
             accounts = account_api.get_customer_accounts(customer_id)
+         
             logger.info("📊 Found %d account(s)", len(accounts))
 
         with allure.step("Validate at least one account exists"):
             assert len(
                 accounts) >= 1, "Newly registered user should have at least one account"
+          
             existing_account = accounts[0]
+         
             assert existing_account.customer_id == customer_id
             assert existing_account.id > 0
+         
             logger.info("💳 Using existing account: %d (balance: $%.2f)",
                         existing_account.id, existing_account.balance)
 
@@ -307,6 +357,7 @@ class TestBankingAPI:
     def test_create_checking_account_via_curl(self, shared_context: dict, account_api: AccountApi):
         customer_id = shared_context["customer_id"]
         existing_account_id = shared_context["existing_account_id"]
+     
         logger.info(
             "🚀 Creating new CHECKING account via curl for customer %d", customer_id)
 
@@ -321,6 +372,7 @@ class TestBankingAPI:
             assert new_account.id > 0, "New account should have a valid ID"
             assert new_account.type == "CHECKING", f"Expected CHECKING, got: {new_account.type}"
             assert new_account.customer_id == customer_id
+         
             logger.info("🆕 CHECKING account created: %d (type: %s)",
                         new_account.id, new_account.type)
 
@@ -333,6 +385,7 @@ class TestBankingAPI:
         existing_account_id = shared_context["existing_account_id"]
         new_account_id = shared_context["new_account_id"]
         transfer_amount = random_transfer_amount(min_val=5, max_val=50)
+
         logger.info("💰 API transfer: $%s from account %d → %d",
                     transfer_amount, existing_account_id, new_account_id)
 
@@ -340,15 +393,18 @@ class TestBankingAPI:
             balance_before_from = account_api.get_account(
                 existing_account_id).balance
             balance_before_to = account_api.get_account(new_account_id).balance
+
             logger.info("📊 Balances before — source: $%.2f | dest: $%.2f",
                         balance_before_from, balance_before_to)
 
         with allure.step(f"POST /transfer ${transfer_amount} from {existing_account_id} to {new_account_id}"):
             transfer_result = account_api.transfer_funds(
                 existing_account_id, new_account_id, transfer_amount)
+
             assert transfer_result["status_code"] == 200, (
                 f"Transfer API failed with status {transfer_result['status_code']}"
             )
+
             logger.info("🔄 Transfer API returned status %d",
                         transfer_result["status_code"])
 
@@ -369,4 +425,5 @@ class TestBankingAPI:
             assert abs(updated_to.balance - expected_to_balance) < 0.01, (
                 f"Destination balance mismatch: expected {expected_to_balance}, got {updated_to.balance}"
             )
+
             logger.info("✅ Balances validated — transfer math checks out!")
