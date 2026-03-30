@@ -26,6 +26,7 @@ class RegisterPage(BasePage):
 
     def open(self) -> "RegisterPage":
         self.navigate(self.PATH)
+        
         return self
 
     def register(self, customer: CustomerRegistration) -> None:
@@ -40,6 +41,7 @@ class RegisterPage(BasePage):
         self.page.fill(self.USERNAME, customer.username)
         self.page.fill(self.PASSWORD, customer.password)
         self.page.fill(self.CONFIRM_PASSWORD, customer.password)
+        
         self.page.click(self.REGISTER_BTN)
         self.page.wait_for_load_state("domcontentloaded")
 
